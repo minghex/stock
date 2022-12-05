@@ -28,8 +28,7 @@ class MainHandler(tornado.web.RequestHandler):
             'name': '=Sheet1!$C$1',
         })
         chart.set_y_axis({ 'name': '十年国债收益率'})
-        # Insert the chart into the worksheet.
-        # worksheet.insert_chart(1, 4, chart)
+
 
         rate_interbank_df = ak.rate_interbank(market="上海银行同业拆借市场", symbol="Shibor人民币", indicator="隔夜")
         rate_interbank_df.filter(items=['报告日' , '利率']).tail(200).to_excel(writer, sheet_name='Sheet1', startcol=4)
@@ -46,7 +45,6 @@ class MainHandler(tornado.web.RequestHandler):
         worksheet.insert_chart(1, 7, chart)
         writer.close()
 
-#todo 平均曲线 +1/-1标准差曲线
 class InfHandler(tornado.web.RequestHandler):
     def get(self):
         df1 = ak.stock_a_pe_and_pb(symbol="000300.SH")
@@ -56,78 +54,69 @@ class InfHandler(tornado.web.RequestHandler):
         df2.set_index('日期', inplace=True)
         df3 = pd.merge(df1, df2, left_index=True, right_index=True, how='inner')
         df3["pe_bond_ratio"] = (
-            df3["dividend_rate"] - df3["中国国债收益率10年"]
+            (df3["dividend_rate"] - df3["中国国债收益率10年"]) / 100
         )
+        df3['20day_rolling_avg'] = df3['pe_bond_ratio'].rolling(360).mean()
+        df3['20day_rolling_avg_std'] = df3['pe_bond_ratio'].rolling(360).std()
+        df3['20day_rolling_avg_std_add_1'] =  df3['20day_rolling_avg'] + df3['20day_rolling_avg_std']
+        df3['20day_rolling_avg_std_sub_1'] =  df3['20day_rolling_avg'] - df3['20day_rolling_avg_std']
+
+        df4 = ak.stock_a_all_pb()
+        df4.set_index('date', inplace=True)
+        df4["sh_index_xmh"] =  df3["close"]
+        df5 = pd.merge(df3, df4, left_index=True, right_index=True, how='inner')
 
         sheetname = 'Sheet1'
         writer = pd.ExcelWriter('board.xlsx', engine = 'xlsxwriter')
-        (max_row, max_col) = df3.shape
-        df3.filter(items=['date' ,'dividend_rate', '中国国债收益率10年', 'pe_bond_ratio']).tail(max_row).to_excel(writer, sheet_name=sheetname)
+        (max_row, max_col) = df5.shape
+        df5.filter(items=['date' ,'pe_bond_ratio', 'sh_index_xmh']).tail(max_row).to_excel(writer, sheet_name=sheetname)
         workbook = writer.book
         worksheet = writer.sheets[sheetname]
         chart = workbook.add_chart({'type': 'line'})
         chart.add_series({
             'categories': [sheetname, 1, 0, max_row, 0],
-            'values': [sheetname, 1, 3, max_row, 3],
-            'name': '股债利差',
+            'values': [sheetname, 1, 1, max_row, 1],
+            'name': 'PE_BOND_RATIO',
         })
-        worksheet.insert_chart(1, 5, chart)
+        chart.add_series({
+            'categories': [sheetname, 1, 0, max_row, 0],
+            'values': [sheetname, 1, 2, max_row, 2],
+            'name': 'SH_INDEX',
+            'y2_axis': True,
+        })
+        chart.set_title({'name': 'PE_BOND_RATIO'})
+
+
+        # chart.add_series({
+        #     'categories': [sheetname, 1, 0, max_row, 0],
+        #     'values': [sheetname, 1, 2, max_row, 2],
+        #     'name': 'ma20',
+        # })
+
+        # chart.add_series({
+        #     'categories': [sheetname, 1, 0, max_row, 0],
+        #     'values': [sheetname, 1, 4, max_row, 4],
+        #     'name': 'std+1',
+        # })
+
+        # chart.add_series({
+        #     'categories': [sheetname, 1, 0, max_row, 0],
+        #     'values': [sheetname, 1, 5, max_row, 5],
+        #     'name': 'std-1',
+        # })
+        worksheet.insert_chart(1, 10, chart)
         writer.close()
 
 
 
 class PE_BOND_RATIO_Handler(tornado.web.RequestHandler):
     def get(self):
-        sheetname = 'PE_BOND_RATIO'
-        writer = pd.ExcelWriter('sample.xlsx', engine = 'xlsxwriter')
-        #PE
-        pe_df = ak.stock_a_pe_and_pb(symbol="000300.SH")
-        pe_df['dividend_rate'] = pe_df['addTtmPe'].apply(lambda x: (1/x)*100)
-        (max_row, max_col) = pe_df.shape
-        pe_df.filter(items=['date' , 'dividend_rate']).tail(max_row).to_excel(writer, sheet_name=sheetname)
-        workbook  = writer.book
-        worksheet = writer.sheets[sheetname]
-        chart = workbook.add_chart({'type': 'line'})
-        chart.add_series({
-            'categories': [sheetname, 1, 1, max_row, 1],
-            'values': [sheetname, 1, 2, max_row, 2],
-            'name': '沪深300股息率',
-        })
-        chart.set_y_axis({ 'name': '沪深300股息率'})
+        wb = xw.Workbook()
+        chart = wb.add_chart()
 
-        #bond
-        startCol = 4
-        df = ak.bond_zh_us_rate()
-        # df['bond_ten'] = df['中国国债收益率10年'].apply(lambda x: x if x > 0 else 0)
-        df.filter(items=['日期' , '中国国债收益率10年']).tail(max_row).to_excel(writer, sheet_name=sheetname, startcol=startCol)
-        chart2 = workbook.add_chart({'type': 'line'})
-        chart2.add_series({
-            'categories': [sheetname, 1, startCol+1, max_row, startCol+1],
-            'values': [sheetname, 1, startCol+2, max_row, startCol+2],
-            'name': [sheetname, 0, startCol+2],
-            'y2_axis': True,
-        })
-        chart2.set_y2_axis({ 'name': '十年国债收益率'})
-        chart.combine(chart2)
-        worksheet.insert_chart(1, startCol+3, chart)
-        
-
-        # for row in range (1, max_row-1):
-        #     row_dict = worksheet.table.get(row, None)
-        #     col_entry1 = row_dict.get(2, None)
-        #     col_entry2 = row_dict.get(6, None)
-        #     val = col_entry1.number-col_entry2.number
-        #     worksheet.write(row, 3, val)
-
-        # chart3 = workbook.add_chart({'type': 'line'})
-        # chart3.add_series({
-        #     'categories': [sheetname, 1, 1, max_row, 1],
-        #     'values': [sheetname, 1, 3, max_row, 3],
-        #     'name': '股债利差',
-        # })
-        # worksheet.insert_chart(20, startCol+3, chart3)
-
-        writer.close()   
+def testHandler():
+        df4 = ak.stock_a_all_pb()
+        print(df4)
 
 def make_app():
     return tornado.web.Application([
