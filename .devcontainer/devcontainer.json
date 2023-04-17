@@ -6,7 +6,7 @@
 	"dockerFile": "Dockerfile",
 
 	"appPort": [
-		"0.0.0.0:8888:8888",
+		"0.0.0.0:8777:8777",
 	],
 
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.

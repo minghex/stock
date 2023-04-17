@@ -9,6 +9,7 @@ import pandas as pd
 import xlsxwriter as xw
 import matplotlib.pyplot as plt
 import numpy as np
+import option as op
 
 STOCK_NUMBER = 0
 
@@ -19,6 +20,8 @@ def testHandler():
     df2 = ak.rate_interbank()
     # df2.tail(10).to_excel(writer, sheet_name='Sheet2')
     # writer.close()
+
+
 
 
 class MainHandler(tornado.web.RequestHandler):
@@ -123,6 +126,9 @@ def create_xlsx_dataframe(
         dataframe: pd.DataFrame,
         chartname: str = 'hello',
         sheetname: str = 'sheet1',
+        indexSymbol: str = 'sh',
+        indexName: str = '上证指数',
+        outfile: str = 'sample.xlsx',
         **kwargs,
     ):
     '''
@@ -134,12 +140,13 @@ def create_xlsx_dataframe(
         itemList.append(key)
 
     #添加指数
-    index_df = ak.stock_a_pe_and_pb(symbol="000300.SH")
+    index_df = ak.stock_a_pe_and_pb(symbol=indexSymbol)
+    index_df = index_df[['date','close']].copy()
     index_df.set_index('date', inplace=True)
     merge_df = pd.merge(dataframe, index_df, left_index=True, right_index=True, how='inner')
     itemList.append('close')
 
-    writer = pd.ExcelWriter('sample.xlsx', engine = 'xlsxwriter')
+    writer = pd.ExcelWriter(outfile, engine = 'xlsxwriter')
     (max_row, max_col) = merge_df.shape
     merge_df.filter(items=itemList).tail(max_row).to_excel(writer, sheet_name=sheetname, index=True)
    
@@ -154,8 +161,8 @@ def create_xlsx_dataframe(
 
     chart.add_series({
         'categories': [sheetname, 1, 0, max_row, 0],
-        'values': [sheetname, 1, 2, max_row, 2],
-        'name': '沪深300指数',
+        'values': [sheetname, 1, max_col, max_row, max_col],
+        'name': indexName,
         'y2_axis': True,
     })
     worksheet.insert_chart(1, max_col+1, chart)
@@ -163,7 +170,15 @@ def create_xlsx_dataframe(
 
 def Macro_China_Shrzgm_Handler():
     df = ak.macro_china_shrzgm()
-    create_xlsx_dataframe(df,chartname='社会融资规模增量',**{'月份': '日期', '社会融资规模增量': '人民币贷款'})
+    df = df[['月份','社会融资规模增量']].copy()
+    df.rename(columns={'月份':'date', '社会融资规模增量':'volume'},inplace=True)
+    print(df.info())
+    print(df.head())
+    df['date'] = pd.to_datetime(df['date'],format='%Y%m')
+    # # print(df.info())
+    # # print(df.head())
+    # create_xlsx_dataframe(df,chartname='社会融资规模增量',outfile='macro.xlsx',**{'月份': '日期', '社会融资规模增量': '人民币贷款'})
+
 
 def todo1Handler():
     # 社会零售 储蓄率 
@@ -190,21 +205,19 @@ def ret_option_df(
     df = pd.DataFrame()
     for v in data:
         daily = ak.option_cffex_hs300_daily_sina(symbol=v)
-        tmpDF = daily[['date','volume']]
+        tmpDF = daily[['date','volume']].copy()
         tmpDF.rename(columns={'date': 'date', 'volume': name},inplace=True)
-        # tmpDF[name]=tmpDF['volume']
         df = pd.concat([df,tmpDF],axis=0)         
     #进行数据清洗
-    
     df['date'] = pd.to_datetime(df['date'],format='%Y-%m-%d')
     df = pd.pivot_table(data=df,index='date',values=name,aggfunc=np.sum ,fill_value=0)
     # print(df.info())
     df.sort_values(by='date',inplace=True)
     return df    
 
-def OPTION_SZ50_LIST_HANDLER():
+def OPTION_HS300_LIST_HANDLER():
     # 沪深300指数期权列表
-    df1 = ak.option_cffex_hs300_list_sina()['上证50指数']
+    df1 = op.option_cffex_hs300_list_sina()['沪深300指数']
     # 沪深300主力期权
     df2 = ak.option_cffex_hs300_spot_sina(symbol=df1[0])
     #call_option
@@ -214,32 +227,124 @@ def OPTION_SZ50_LIST_HANDLER():
     #pcr_volume
     df = pd.merge(p_df,c_df,how='left',on='date')
     df['pcr'] = df['p_volume'] / df['c_volume']
-    create_xlsx_dataframe(df,'pcr',**{'date': 'date', 'pcr': 'pcr'})
+    create_xlsx_dataframe(df,'沪深300指数期权持仓量PCR',outfile='hs300.xlsx',**{'date': 'date', 'pcr': 'pcr', 'p_volume':'p_volume', 'c_volume':'c_volume'})
+    return
+
+def ret_zz1000_option_df(
+        data : pd.DataFrame,
+        name : str,
+) -> pd.DataFrame:
+    #获取数据源
+    df = pd.DataFrame()
+    for v in data:
+        daily = ak.option_cffex_zz1000_daily_sina(symbol=v)
+        tmpDF = daily[['date','volume']].copy()
+        tmpDF.rename(columns={'date': 'date', 'volume': name},inplace=True)
+        df = pd.concat([df,tmpDF],axis=0)         
+    #进行数据清洗
+    df['date'] = pd.to_datetime(df['date'],format='%Y-%m-%d')
+    df = pd.pivot_table(data=df,index='date',values=name,aggfunc=np.sum ,fill_value=0)
+    # print(df.info())
+    df.sort_values(by='date',inplace=True)
+    return df    
+
+def OPTION_ZZ1000_LIST_HANDLER():
+    # 中证1000指数期权列表
+    df1 = op.option_cffex_zz1000_list_sina()['中证1000指数']
+    # 沪深300主力期权
+    df2 = ak.option_cffex_zz1000_spot_sina(symbol=df1[0])
+    #call_option
+    c_df = ret_zz1000_option_df(df2['看涨合约-标识'],"c_volume")
+    #pull_option
+    p_df = ret_zz1000_option_df(df2['看跌合约-标识'],'p_volume')
+    #pcr_volume
+    df = pd.merge(p_df,c_df,how='left',on='date')
+    df['pcr'] = df['p_volume'] / df['c_volume']
+    create_xlsx_dataframe(df,'中证1000指数期权持仓量PCR',outfile='zz1000.xlsx',**{'date': 'date', 'pcr': 'pcr', 'p_volume':'p_volume', 'c_volume':'c_volume'})
     return
     
+def ret_sz50_option_df(
+        data : pd.DataFrame,
+        name : str,
+) -> pd.DataFrame:
+    #获取数据源
+    df = pd.DataFrame()
+    for v in data:
+        daily = op.option_cffex_sz50_daily_sina(symbol=v)
+        tmpDF = daily[['date','volume']].copy()
+        tmpDF.rename(columns={'date': 'date', 'volume': name},inplace=True)
+        df = pd.concat([df,tmpDF],axis=0)         
+    #进行数据清洗
+    df['date'] = pd.to_datetime(df['date'],format='%Y-%m-%d')
+    df = pd.pivot_table(data=df,index='date',values=name,aggfunc=np.sum ,fill_value=0)
+    # print(df.info())
+    df.sort_values(by='date',inplace=True)
+    return df    
 
+def OPTION_SZ50_LIST_HANDLER():
+    # sz50指数期权列表
+    df1 = op.option_cffex_sz50_list_sina()['上证50指数']
+    # sz50主力期权
+    df2 = op.option_cffex_sz50_spot_sina(symbol=df1[0])
+    #call_option
+    c_df = ret_sz50_option_df(df2['看涨合约-标识'],"c_volume")
+    #pull_option
+    p_df = ret_sz50_option_df(df2['看跌合约-标识'],'p_volume')
+    #pcr_volume
+    df = pd.merge(p_df,c_df,how='left',on='date')
+    df['pcr'] = df['p_volume'] / df['c_volume']
+    create_xlsx_dataframe(df,'上证50指数期权持仓量PCR',outfile='sz50.xlsx',**{'date': 'date', 'pcr': 'pcr', 'p_volume':'p_volume', 'c_volume':'c_volume'})
+    return
 
+def BOND_HANDLER():
+    bond_zh_us_rate_df = ak.bond_zh_us_rate()
+    bond_ten_y = bond_zh_us_rate_df[['日期','中国国债收益率2年']].copy()
+    bond_ten_y.rename(columns={'日期': 'date'},inplace=True)
+    bond_ten_y['date'] = pd.to_datetime(bond_ten_y['date'],format='%Y-%m-%d')
+    bond_ten_y.set_index('date',inplace=True)
 
-def make_app():
-    return tornado.web.Application([
-        (r"/", MainHandler),
-    ])
+    pmi_df = ak.macro_china_pmi_yearly()
+
+    merge_df = pd.merge(pmi_df,bond_ten_y,how='inner',left_index=True, right_index=True)
+    outfile='bond.xlsx'
+    sheetname='bond'
+    writer = pd.ExcelWriter(outfile, engine = 'xlsxwriter')
+    (max_row, max_col) = merge_df.shape
+    merge_df.tail(max_row).to_excel(writer, sheet_name=sheetname, index=True)
+   
+    workbook = writer.book
+    worksheet = writer.sheets[sheetname]
+    chart = workbook.add_chart({'type': 'line'})
+    chart.add_series({
+        'categories': [sheetname, 1, 0, max_row, 0],
+        'values': [sheetname, 1, 1, max_row, 1],
+        'name': 'PMI',
+    })
+
+    chart.add_series({
+        'categories': [sheetname, 1, 0, max_row, 0],
+        'values': [sheetname, 1, max_col, max_row, max_col],
+        'name': '2年期国债收益率',
+        'y2_axis': True,
+    })
+    worksheet.insert_chart(1, max_col+1, chart)
+    writer.close()
+
+def OPTION_TEST():
+    OPTION_ZZ1000_LIST_HANDLER()
+    OPTION_HS300_LIST_HANDLER()
+    OPTION_SZ50_LIST_HANDLER()
+
+class Handler(tornado.web.RequestHandler):
+    def get(self):
+        self.write('sss')
 
 async def main():
-    # global STOCK_NUMBER 
-    # STOCK_NUMBER = MARKET_BASE_INFO_HANDLER()
-    # print(STOCK_NUMBER)
-    # # todo1Handler()
-    # STOCK_RANk_HANDLER()
-   
-    OPTION_SZ50_LIST_HANDLER()
-    # SHIBOR_BOND_HANDLER()
-    # Macro_China_Shrzgm_Handler()
-    # PE_BOND_HANDLER()
-    # app = make_app()
-    # app.listen(8888)
-    # print("service ready")
-    # await asyncio.Event().wait()
+    application = tornado.web.Application({
+        (r"/", TestHandler)
+    })
+    application.listen(8888)
+    await asyncio.Event().wait()
 
 if __name__ == "__main__":
     asyncio.run(main())

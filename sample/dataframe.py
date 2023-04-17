@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import pandas as pd 
+import matplotlib.pyplot as plt
 
 def combine_concat():
     df1 = pd.DataFrame({
@@ -75,7 +76,16 @@ def pivot():
     df2 = pd.pivot(df,index='Attr1', columns=['Attr2'], values='values')
     print(df2)
 
-pivot()
+# pivot()
+
+
+def run_plot():
+    plt.plot([1,2], [3,4])
+    plt.savefig('./show2.png')
+    plt.show()
+
+run_plot()
+
 # df = pd.DataFrame({
 #     "Name": [
 #         "A",
