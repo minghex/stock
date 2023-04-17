@@ -1,10 +1,10 @@
 from handlers.base import BaseHandler
+import json
 
 # import model.pcr as pcr
 
 class PCRHandler(BaseHandler):
     def get(self):
-        # df = pcr.OPTION_SZ50_LIST_HANDLER()
-        # print(df)
-        print("call pcrhandler")
-        self.write("call pcr_handler")
+        my_data = {'code': 0, 'foo': 'bar', 'baz': [1, 2, 3]}
+        self.set_header('Content-Type', 'application/json')
+        self.write(json.dumps(my_data))
