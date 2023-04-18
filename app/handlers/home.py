@@ -1,4 +1,4 @@
-from handlers.base import BaseHandler
+from .base import BaseHandler
 
 class HomeHandler(BaseHandler):
     pass
