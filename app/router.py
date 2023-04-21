@@ -1,7 +1,7 @@
 from handlers.home import HomeHandler
-from handlers.pcr import PCRHandler
+from handlers.pcr import OptionPCRHandler 
 
 routers = [
     (r'/', HomeHandler),
-    (r'/pcr', PCRHandler),
+    (r'/option', OptionPCRHandler),
 ]

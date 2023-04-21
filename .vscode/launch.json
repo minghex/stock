@@ -8,7 +8,7 @@
             "name": "web",
             "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}/backend/main.py"
+            "program": "${workspaceFolder}/app/main.py"
         }
     ]
 }
