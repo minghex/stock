@@ -9,13 +9,12 @@ class BaseHandler(tornado.web.RequestHandler):
         self.set_header('Content-Type', 'application/json')
 
     def prepare(self):
-        pass
         # 请求处理之前执行
-        # try:
-        #     self.request_data = json.loads(self.request.body)
-        # except ValueError:
-        #     self.write_response(400,"Invalid request body")
-        #     self.finish()
+        try:
+            self.request_data = json.loads(self.request.body)
+        except ValueError:
+            self.write_response(400,"Invalid request body")
+            self.finish()
         
 
     def on_finish(self):
