@@ -5,10 +5,16 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "web",
+            "name": "app",
             "type": "python",
             "request": "launch",
             "program": "${workspaceFolder}/app/main.py"
+        },
+        {
+            "name": "webserver",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/webserver/main.py"
         }
     ]
 }

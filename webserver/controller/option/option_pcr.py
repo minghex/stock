@@ -1,32 +1,25 @@
-import json
 import akshare as ak
 import pandas as pd
 import numpy as np
-from .base import BaseHandler
-import handlers.option as op 
+import controller.option.option_data as op 
+from controller.handler import * 
 
-class PCRHandler(BaseHandler):
-    def get(self):
-        df = ak.macro_china_shrzgm()
-        df = df[['月份','社会融资规模增量']].copy()
-        df.rename(columns={'月份':'date', '社会融资规模增量':'volume'},inplace=True)
-        df_json = df.to_json()
-
-        print(df_json)
-        
-
-        my_data = {'code': 0, 'data':df_json}
-        self.set_header('Content-Type', 'application/json')
-        self.write(json.dumps(my_data))
-
+# 数据缓存
+option_pcr_cache_dict = {}
 
 def ret_option_df(
         data : pd.DataFrame,
         name : str,
+        debug = False,
 ) -> pd.DataFrame:
     #获取数据源
     df = pd.DataFrame()
+    total_data = len(data)
+    index = 0
     for v in data:
+        index += 1
+        if index == total_data:
+            break
         daily = ak.option_cffex_hs300_daily_sina(symbol=v)
         tmpDF = daily[['date','volume']].copy()
         tmpDF.rename(columns={'date': 'date', 'volume': name},inplace=True)
@@ -46,7 +39,7 @@ def OPTION_HS300_LIST_HANDLER() -> pd.DataFrame:
     #call_option
     c_df = ret_option_df(df2['看涨合约-标识'],"c_volume")
     #pull_option
-    p_df = ret_option_df(df2['看跌合约-标识'],'p_volume')
+    p_df = ret_option_df(df2['看跌合约-标识'],'p_volume',True)
     #pcr_volume
     df = pd.merge(p_df,c_df,how='left',on='date')
     df['pcr'] = df['p_volume'] / df['c_volume']
@@ -114,23 +107,37 @@ def OPTION_SZ50_LIST_HANDLER() -> pd.DataFrame:
     df['pcr'] = df['p_volume'] / df['c_volume']
     return df['pcr'].copy()
 
-class OptionPCRHandler(BaseHandler):
-    def get(self):
-        df = OPTION_HS300_LIST_HANDLER()
-        self.write_success_response(df.to_json())
+# 缓存失效时间戳
+class OPTION_PCR_Handler(BaseHandler):
+    async def get(self):
+        doc = await self.get_option_pcr_data(0)
+        self.write_success_response(doc)
 
-    def post(self):
-        # option_type = self.request_data.get('option_type',0)
-        option_type = 0
-        df = self.option_switch(option_type) 
-        self.write_success_response(df.to_json())
 
-    def option_switch(self, case, *args) -> pd.DataFrame:
+    async def post(self):
+        json_data = self.get_json_body()
+        if not json_data:
+            self.write_response(Response_ReqError_Code,"not found option type")
+        else:
+            option_type = json_data['option_type']
+            doc =await self.get_option_pcr_data(option_type)
+            self.write_success_response(doc)
+
+    # 获取数据
+    async def get_option_pcr_data(self, type) -> str:
+        key = "option_pcr_" + str(type)
+        doc = await self.get_data_from_database(key)
+        if not doc:
+            doc = self.gen_option_pcr_data(type).to_json()
+            await self.save_data_to_db(key, doc)
+        return doc
+
+    # 构建数据(逻辑上每日只调用一次)
+    def gen_option_pcr_data(self, case, *args) -> pd.DataFrame:
         cases = {
-            0: OPTION_SZ50_LIST_HANDLER,
-            1: OPTION_HS300_LIST_HANDLER,
-            2: OPTION_ZZ1000_LIST_HANDLER,
+            0: OPTION_HS300_LIST_HANDLER,
+            1: OPTION_ZZ1000_LIST_HANDLER,
+            2: OPTION_SZ50_LIST_HANDLER,
         }
-        func = cases.get(case, OPTION_SZ50_LIST_HANDLER)
+        func = cases.get(case, OPTION_HS300_LIST_HANDLER)
         return func(*args)
-
