@@ -108,7 +108,7 @@ def OPTION_SZ50_LIST_HANDLER() -> pd.DataFrame:
     return df['pcr'].copy()
 
 # 缓存失效时间戳
-class OPTION_PCR_Handler(BaseHandler):
+class option_pcr_handler(BaseHandler):
     async def get(self):
         doc = await self.get_option_pcr_data(0)
         self.write_success_response(doc)
