@@ -113,7 +113,6 @@ class option_pcr_handler(BaseHandler):
         doc = await self.get_option_pcr_data(0)
         self.write_success_response(doc)
 
-
     async def post(self):
         json_data = self.get_json_body()
         if not json_data:

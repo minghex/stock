@@ -31,7 +31,14 @@ class BaseHandler(tornado.web.RequestHandler):
     async def find_one(self, collection, filter):
         document = await collection.find_one(filter)
         return document
-    
+
+    async def get_data(self, key, func) -> str:
+        doc = await self.get_data_from_database(key)
+        if not doc:
+            doc = func()
+            await self.save_data_to_db(key,doc)
+        return doc
+
     async def get_data_from_database(self, key) -> str:
         cache_data = await self.get_data_from_cache(key)
         if not cache_data:
