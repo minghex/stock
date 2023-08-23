@@ -19,4 +19,5 @@ class stock_north_net_flow(BaseHandler):
         
         merged_df = pd.merge(df_net_flow, df_sz_index, on='date')
         select_columns = ['date', 'value', 'close']
-        self.write_success_response(merged_df[select_columns].to_json())
+        res = merged_df.tail(300).reset_index(drop=True)
+        self.write_success_response(res[select_columns].to_json())
