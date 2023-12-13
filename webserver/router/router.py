@@ -2,7 +2,7 @@ from controller.handler import *
 from controller.option.option_pcr import option_pcr_handler 
 from controller.stock.stock_bond_margin import stock_pe_bond_Handler 
 from controller.stock.stock_cxsl_xxtp import stock_csxl_xxtp_handler 
-from controller.stock.stock_north import stock_north_net_flow
+from controller.stock.stock_summary import *
 
 class backend_handler(BaseHandler):
     async def get(self):
@@ -17,5 +17,7 @@ routers = [
     #持续缩量,向下突破
     (r'/stock/cxsl/xxtp',stock_csxl_xxtp_handler),
     #北向净流入
-    (r'/stock/north/netflow', stock_north_net_flow)
+    (r'/stock/north/netflow', stock_north_net_flow),
+    #股指期货Cano结构
+    (r'/stock/index/futures', stock_futures_index)
 ]
